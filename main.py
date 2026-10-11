@@ -213,8 +213,9 @@ def fetch_data(Number: str = Query(None)):
         
     return {"status": "success", "Data": result.get("Data"), "Developer": "@Maybechx"}
 
-# --- Background Processing for Telegram Webhook ---
+# --- Background Processing for Telegram Webhook with Error Reporting ---
 async def process_telegram_update(data: dict):
+    chat_id = None
     try:
         if "message" in data and "text" in data["message"]:
             chat_id = data["message"]["chat"]["id"]
@@ -239,7 +240,7 @@ async def process_telegram_update(data: dict):
                 elif search_res.get("status") == "not_found":
                     reply_text = f"❌ Number `{text}` not found in the database."
                 else:
-                    reply_text = "⚠️ An error occurred while querying the database."
+                    reply_text = f"⚠️ Search Error: {search_res.get('message', 'Unknown database error')}"
             else:
                 reply_text = "⚠️ Please send a valid 10-digit phone number (digits only)."
                 
@@ -250,12 +251,16 @@ async def process_telegram_update(data: dict):
             })
     except Exception as e:
         print(f"Background Processing Error: {str(e)}")
+        if chat_id:
+            requests.post(f"{TELEGRAM_API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"⚠️ Server Exception: {str(e)}"
+            })
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
-        # Hand off execution to background task so we return 200 OK instantly and avoid Telegram timeout
         background_tasks.add_task(process_telegram_update, data)
     except Exception as e:
         print(f"Webhook Error: {str(e)}")
