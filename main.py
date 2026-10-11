@@ -1,7 +1,7 @@
 import os
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from fastapi import FastAPI, Query, Request, Response
+from fastapi import FastAPI, Query, Request, Response, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import duckdb
@@ -16,7 +16,7 @@ USERNAME = os.getenv("OXYLABS_USERNAME", "user-ddc_16512248")
 PASSWORD = os.getenv("OXYLABS_PASSWORD", "8Boeb~60zRW3")
 BUCKET_ID = os.getenv("BUCKET_ID", "CutehackX/hitek-data-bucket")
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8637568132:AAGRnWPNXSuvvq-JCUjBMW5Z1_1mtO_jVFU")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8860561051:AAGaPGzEwW5vYDjgfY5bKvs9D8ISBUYbEh8")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 ENCODED_USER = urllib.parse.quote_plus(USERNAME)
@@ -213,12 +213,9 @@ def fetch_data(Number: str = Query(None)):
         
     return {"status": "success", "Data": result.get("Data"), "Developer": "@Maybechx"}
 
-# --- Telegram Webhook Endpoint ---
-@app.post("/webhook")
-async def telegram_webhook(request: Request):
+# --- Background Processing for Telegram Webhook ---
+async def process_telegram_update(data: dict):
     try:
-        data = await request.json()
-        
         if "message" in data and "text" in data["message"]:
             chat_id = data["message"]["chat"]["id"]
             text = data["message"]["text"].strip()
@@ -251,7 +248,15 @@ async def telegram_webhook(request: Request):
                 "text": reply_text,
                 "parse_mode": "Markdown"
             })
-            
+    except Exception as e:
+        print(f"Background Processing Error: {str(e)}")
+
+@app.post("/webhook")
+async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
+    try:
+        data = await request.json()
+        # Hand off execution to background task so we return 200 OK instantly and avoid Telegram timeout
+        background_tasks.add_task(process_telegram_update, data)
     except Exception as e:
         print(f"Webhook Error: {str(e)}")
         
