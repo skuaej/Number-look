@@ -92,23 +92,95 @@ LANDING_PAGE_HTML = """
     <meta charset="UTF-8">
     <title>Hitek Data Gateway - LIVE</title>
     <style>
-        body { margin: 0; background-color: #050505; color: #00ffcc; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .overlay { text-align: center; background: rgba(10,10,10,0.85); padding: 40px; border: 1px solid #00ffcc; border-radius: 12px; box-shadow: 0 0 20px rgba(0,255,204,0.3); }
-        h1 { font-size: 3em; text-transform: uppercase; letter-spacing: 4px; }
+        body { margin: 0; overflow: hidden; background-color: #050505; color: #00ffcc; font-family: 'Courier New', Courier, monospace; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        .overlay { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            text-align: center; background: rgba(10, 10, 10, 0.85); padding: 50px; 
+            border: 1px solid #00ffcc; border-radius: 12px; box-shadow: 0 0 30px rgba(0, 255, 204, 0.3); 
+            backdrop-filter: blur(5px);
+        }
+        h1 { margin: 0 0 15px 0; font-size: 3.5em; text-transform: uppercase; letter-spacing: 6px; text-shadow: 0 0 15px #00ffcc; }
+        p { font-size: 1.2em; margin: 8px 0; color: #ccc; }
+        .highlight { color: #00ffcc; font-weight: bold; }
+        .status-box { 
+            margin-top: 30px; font-weight: bold; padding: 15px; 
+            border-radius: 8px; background: rgba(0, 255, 204, 0.1); 
+            border: 1px solid rgba(0, 255, 204, 0.5);
+            font-size: 1.1em;
+        }
+        .blinking { animation: blinker 1.5s linear infinite; display: inline-block; }
+        @keyframes blinker { 50% { opacity: 0; } }
     </style>
 </head>
 <body>
+    <div id="canvas-container"></div>
     <div class="overlay">
         <h1>SYSTEM ONLINE</h1>
-        <p>FastAPI Gateway & Telegram Webhook Active</p>
+        <p>API Gateway is <span class="highlight">Active & Secured</span></p>
+        <p>Parquet Cloud Engine: <span class="highlight">High-Speed Parallel Stream</span></p>
+        <div class="status-box">
+            <span class="blinking" style="color: #00ffcc;">●</span> HTTP 200 OK - LISTENING FOR QUERIES
+        </div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const geometry = new THREE.BufferGeometry();
+        const vertices = [];
+        for (let i = 0; i < 8000; i++) {
+            vertices.push(THREE.MathUtils.randFloatSpread(3000));
+            vertices.push(THREE.MathUtils.randFloatSpread(3000));
+            vertices.push(THREE.MathUtils.randFloatSpread(3000));
+        }
+        
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        const material = new THREE.PointsMaterial({ color: 0x00ffcc, size: 2.5, transparent: true, opacity: 0.8 });
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        camera.position.z = 1200;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            points.rotation.x += 0.0005;
+            points.rotation.y += 0.001;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
 """
 
 @app.exception_handler(StarletteHTTPException)
 async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"status": "rejected", "Developer": "@Maybechx"})
+    if exc.status_code == 404:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": "rejected",
+                "message": "Invalid endpoint. STRICTLY use /FetchData?Number=XXXXXXXXXX",
+                "Developer": "@Maybechx"
+            }
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "Developer": "@Maybechx"}
+    )
 
 @app.get("/", response_class=HTMLResponse)
 def root_landing_page():
@@ -117,11 +189,25 @@ def root_landing_page():
 @app.get("/FetchData")
 def fetch_data(Number: str = Query(None)):
     if not Number or not Number.isdigit() or len(Number) < 10 or len(Number) > 15:
-        return JSONResponse(status_code=400, content={"status": "rejected", "message": "STRICTLY use /FetchData?Number=XXXXXXXXXX", "Developer": "@Maybechx"})
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "rejected",
+                "message": "STRICTLY use /FetchData?Number=XXXXXXXXXX",
+                "Developer": "@Maybechx"
+            }
+        )
     
     result = perform_search(Number)
     if result.get("status") == "not_found":
-        return JSONResponse(status_code=404, content={"status": "not_found", "phone": Number, "Developer": "@Maybechx"})
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": "not_found", 
+                "phone": Number,
+                "Developer": "@Maybechx"
+            }
+        )
     elif result.get("status") == "error":
         return JSONResponse(status_code=500, content=result)
         
@@ -130,32 +216,44 @@ def fetch_data(Number: str = Query(None)):
 # --- Telegram Webhook Endpoint ---
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
-    data = await request.json()
-    
-    # Extract message from Telegram payload
-    if "message" in data and "text" in data["message"]:
-        chat_id = data["message"]["chat"]["id"]
-        text = data["message"]["text"].strip()
+    try:
+        data = await request.json()
         
-        if text.isdigit():
-            # Call the search engine logic directly
-            search_res = perform_search(text)
+        if "message" in data and "text" in data["message"]:
+            chat_id = data["message"]["chat"]["id"]
+            text = data["message"]["text"].strip()
             
-            if search_res.get("status") == "success":
-                records_data = search_res.get("Data", {})
-                reply_text = f"MATCH FOUND FOR: {text}\n\nMain Records: {len(records_data.get('Main_Records', []))}\nAlt Records: {len(records_data.get('Alt_Records', []))}\n\nData: {str(records_data)[:3500]}"
-            elif search_res.get("status") == "not_found":
-                reply_text = f"Number {text} not found in database."
+            if text.startswith("/start") or text.startswith("/help"):
+                reply_text = (
+                    "👋 **Welcome to Hitek Data Gateway!**\n\n"
+                    "Send any 10-digit mobile number here to instantly search the database via high-speed zero-download stream."
+                )
+            elif text.isdigit():
+                search_res = perform_search(text)
+                
+                if search_res.get("status") == "success":
+                    records_data = search_res.get("Data", {})
+                    reply_text = (
+                        f"✅ **MATCH FOUND FOR: {text}**\n\n"
+                        f"Main Records: {len(records_data.get('Main_Records', []))}\n"
+                        f"Alt Records: {len(records_data.get('Alt_Records', []))}\n\n"
+                        f"Data:\n{str(records_data)[:3500]}"
+                    )
+                elif search_res.get("status") == "not_found":
+                    reply_text = f"❌ Number `{text}` not found in the database."
+                else:
+                    reply_text = "⚠️ An error occurred while querying the database."
             else:
-                reply_text = f"Error processing query."
-        else:
-            reply_text = "Please send a valid phone number digits only."
+                reply_text = "⚠️ Please send a valid 10-digit phone number (digits only)."
+                
+            requests.post(f"{TELEGRAM_API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": reply_text,
+                "parse_mode": "Markdown"
+            })
             
-        # Send reply back to Telegram user via Telegram HTTP API
-        requests.post(f"{TELEGRAM_API_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": reply_text
-        })
+    except Exception as e:
+        print(f"Webhook Error: {str(e)}")
         
     return Response(status_code=200)
-  
+    
