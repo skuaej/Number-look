@@ -17,11 +17,22 @@ PASSWORD = os.getenv("OXYLABS_PASSWORD", "8Boeb~60zRW3")
 BUCKET_ID = os.getenv("BUCKET_ID", "CutehackX/hitek-data-bucket")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8860561051:AAGaPGzEwW5vYDjgfY5bKvs9D8ISBUYbEh8")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://exact-gavrielle-uhhy5-0c389b86.koyeb.app")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 ENCODED_USER = urllib.parse.quote_plus(USERNAME)
 ENCODED_PASS = urllib.parse.quote_plus(PASSWORD)
 PROXY_URL = f"http://{ENCODED_USER}:{ENCODED_PASS}@ddc.oxylabs.io:8001"
+
+# --- Auto-Configure Webhook on Startup ---
+@app.on_event("startup")
+def startup_event():
+    try:
+        target_webhook = f"{WEBHOOK_URL}/webhook"
+        response = requests.get(f"{TELEGRAM_API_URL}/setWebhook?url={target_webhook}")
+        print(f"Auto-Webhook Registration Response: {response.json()}")
+    except Exception as e:
+        print(f"Startup Webhook Error: {str(e)}")
 
 def query_shard(uri: str, record_type: str, target_number: str) -> pd.DataFrame:
     """Worker function to query a single Parquet file in a thread-isolated connection."""
@@ -213,7 +224,7 @@ def fetch_data(Number: str = Query(None)):
         
     return {"status": "success", "Data": result.get("Data"), "Developer": "@Maybechx"}
 
-# --- Background Processing for Telegram Webhook with Error Reporting ---
+# --- Background Processing for Telegram Webhook ---
 async def process_telegram_update(data: dict):
     chat_id = None
     try:
@@ -221,7 +232,7 @@ async def process_telegram_update(data: dict):
             chat_id = data["message"]["chat"]["id"]
             text = data["message"]["text"].strip()
             
-            if text.startswith("/start") or text.startswith("/help"):
+            if text.lower().startswith("/start") or text.lower().startswith("/help"):
                 reply_text = (
                     "👋 **Welcome to Hitek Data Gateway!**\n\n"
                     "Send any 10-digit mobile number here to instantly search the database via high-speed zero-download stream."
