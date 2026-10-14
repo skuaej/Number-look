@@ -185,12 +185,12 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
             content={
                 "status": "rejected",
                 "message": "Invalid endpoint. STRICTLY use /FetchData?Number=XXXXXXXXXX",
-                "Developer": "@Maybechx"
+                "Developer": "@jio_osint_bot"
             }
         )
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail, "Developer": "@Maybechx"}
+        content={"detail": exc.detail, "Developer": "@jio_osint_bot"}
     )
 
 @app.get("/", response_class=HTMLResponse)
@@ -205,7 +205,7 @@ def fetch_data(Number: str = Query(None)):
             content={
                 "status": "rejected",
                 "message": "STRICTLY use /FetchData?Number=XXXXXXXXXX",
-                "Developer": "@Maybechx"
+                "Developer": "@jio_osint_bot"
             }
         )
     
@@ -216,13 +216,13 @@ def fetch_data(Number: str = Query(None)):
             content={
                 "status": "not_found", 
                 "phone": Number,
-                "Developer": "@Maybechx"
+                "Developer": "@jio_osint_bot"
             }
         )
     elif result.get("status") == "error":
         return JSONResponse(status_code=500, content=result)
         
-    return {"status": "success", "Data": result.get("Data"), "Developer": "@Maybechx"}
+    return {"status": "success", "Data": result.get("Data"), "Developer": "@jio_osint_bot"}
 
 # --- Background Processing for Telegram Webhook ---
 async def process_telegram_update(data: dict):
@@ -235,7 +235,8 @@ async def process_telegram_update(data: dict):
             if text.lower().startswith("/start") or text.lower().startswith("/help"):
                 reply_text = (
                     "👋 **Welcome to Hitek Data Gateway!**\n\n"
-                    "Send any 10-digit mobile number here to instantly search the database via high-speed zero-download stream."
+                    "Send any 10-digit mobile number here to instantly search the database via high-speed zero-download stream.\n\n"
+                    "Developer: @jio_osint_bot"
                 )
             elif text.isdigit():
                 search_res = perform_search(text)
@@ -246,14 +247,15 @@ async def process_telegram_update(data: dict):
                         f"✅ **MATCH FOUND FOR: {text}**\n\n"
                         f"Main Records: {len(records_data.get('Main_Records', []))}\n"
                         f"Alt Records: {len(records_data.get('Alt_Records', []))}\n\n"
-                        f"Data:\n{str(records_data)[:3500]}"
+                        f"Data:\n{str(records_data)[:3500]}\n\n"
+                        f"Developer: @jio_osint_bot"
                     )
                 elif search_res.get("status") == "not_found":
-                    reply_text = f"❌ Number `{text}` not found in the database."
+                    reply_text = f"❌ Number `{text}` not found in the database.\n\nDeveloper: @jio_osint_bot"
                 else:
-                    reply_text = f"⚠️ Search Error: {search_res.get('message', 'Unknown database error')}"
+                    reply_text = f"⚠️ Search Error: {search_res.get('message', 'Unknown database error')}\n\nDeveloper: @jio_osint_bot"
             else:
-                reply_text = "⚠️ Please send a valid 10-digit phone number (digits only)."
+                reply_text = "⚠️ Please send a valid 10-digit phone number (digits only).\n\nDeveloper: @jio_osint_bot"
                 
             requests.post(f"{TELEGRAM_API_URL}/sendMessage", json={
                 "chat_id": chat_id,
