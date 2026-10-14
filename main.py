@@ -17,7 +17,7 @@ PASSWORD = os.getenv("OXYLABS_PASSWORD", "8Boeb~60zRW3")
 BUCKET_ID = os.getenv("BUCKET_ID", "CutehackX/hitek-data-bucket")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8860561051:AAGaPGzEwW5vYDjgfY5bKvs9D8ISBUYbEh8")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://exact-gavrielle-uhhy5-0c389b86.koyeb.app")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://number-look-production.up.railway.app")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 ENCODED_USER = urllib.parse.quote_plus(USERNAME)
@@ -35,7 +35,7 @@ def startup_event():
         print(f"Startup Webhook Error: {str(e)}")
 
 def query_shard(uri: str, record_type: str, target_number: str) -> pd.DataFrame:
-    """Worker function to query a single Parquet file in a thread-isolated connection."""
+    """Worker function to query a single Parquet file with a safety row limit."""
     os.environ["http_proxy"] = PROXY_URL
     os.environ["https_proxy"] = PROXY_URL
     
@@ -48,6 +48,7 @@ def query_shard(uri: str, record_type: str, target_number: str) -> pd.DataFrame:
         SELECT *, '{record_type}' AS _record_type 
         FROM read_parquet('{uri}') 
         WHERE {col_name} = '{target_number}'
+        LIMIT 50
     """
     try:
         return con.execute(query).df()
@@ -58,6 +59,10 @@ def query_shard(uri: str, record_type: str, target_number: str) -> pd.DataFrame:
 def perform_search(number: str) -> dict:
     if not number or not number.isdigit() or len(number) < 10 or len(number) > 15:
         return {"status": "rejected", "message": "Invalid number format."}
+    
+    # Block placeholder/repeated numbers (e.g., 9999999999, 0000000000) to prevent overflow
+    if len(set(number)) == 1:
+        return {"status": "rejected", "message": "Placeholder numbers are not allowed."}
     
     last_digit = number[-1]
     primary_uri = f"hf://buckets/{BUCKET_ID}/final_master_shard_{last_digit}.parquet"
